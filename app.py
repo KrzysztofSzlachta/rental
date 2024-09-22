@@ -62,6 +62,14 @@ def delete_subject(subject_id):
 
     return {'message': 'Nie znaleziono obiektu o takim id.'}, 404
 
+@app.route('/api/subject?name=<wanted_name>&sortField=<sort_field>&sortOrder=<sort_order>&pageSize=<int: page_size>&pageNumber=<int: page_number>&code=<searched_code>')
+def get_search(wanted_name, sort_field, sort_order, page_size, page_number, searched_code):
+    designates_subjects = []
+    for i in range((page_number-1) * page_size, (page_number-1) * page_size + page_size):
+        if wanted_name == subjects[i]['name'] and searched_code == subjects[i]['code']:
+            designates_subjects.append(subjects[i])
+    designates_subjects = sorted(designates_subjects, key=lambda k: k['name'])
+    return designates_subjects
 
 if __name__ == '__main__':
     app.run(debug=True)
