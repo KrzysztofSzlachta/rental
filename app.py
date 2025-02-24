@@ -1,5 +1,17 @@
 from flask import Flask, request
+import psycopg2
 
+conn = psycopg2.connect(
+    dbname="postgres",
+    user="postgres",   # Domyślny użytkownik PostgreSQL
+    password="1234"
+)
+
+cur = conn.cursor()
+cur.execute("select * from osoby")
+result = cur.fetchall()
+
+print(result, "1")
 app = Flask(__name__)
 
 subjects = [{'subject_id': 1, 'name': 'test', 'code': '2137'}]
@@ -70,6 +82,7 @@ def get_search(wanted_name, sort_field, sort_order, page_size, page_number, sear
             designates_subjects.append(subjects[i])
     designates_subjects = sorted(designates_subjects, key=lambda k: k['name'])
     return designates_subjects
+
 
 if __name__ == '__main__':
     app.run(debug=True)
