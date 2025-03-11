@@ -1,13 +1,16 @@
-CREATE DATABASE rentals IF NOT EXISTS
+CREATE DATABASE rentals
     WITH
     OWNER = postgres
     ENCODING = 'UTF8'
+    LC_COLLATE = 'pl-PL'
+    LC_CTYPE = 'pl-PL'
+    TABLESPACE = pg_default
     CONNECTION LIMIT = -1
     IS_TEMPLATE = False;
 
 CREATE TABLE public.people
 (
-    "ID_person" integer,
+    "ID_person" serial,
     first_name text,
     surname text,
     pesel bigint,
@@ -22,7 +25,7 @@ ALTER TABLE IF EXISTS public.people
 
 CREATE TABLE public.items
 (
-    "ID_item" integer,
+    "ID_item" serial,
     name text,
     description text,
     type text,
@@ -35,7 +38,7 @@ ALTER TABLE IF EXISTS public.items
 
 CREATE TABLE public.reservations
 (
-    "ID_reservation" integer,
+    "ID_reservation" serial,
     "ID_person" integer,
     "ID_item" integer,
     starting_time timestamp with time zone,

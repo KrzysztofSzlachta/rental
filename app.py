@@ -17,16 +17,26 @@ app = Flask(__name__)
 @app.route('/api/people', methods=['GET'])
 def get_all_people():
     cur.execute('SELECT * FROM people')
-    return {'message': 'data taken succesfully', 'data': cur.fetchall()}
+    data = cur.fetchall()
+    result = []
+    for i in data:
+        if i[7]:
+            continue
+        else:
+            result.append([i[0], i[1], i[2], i[3], i[4], i[5], i[6]])
+    return {'data': result}
 
 
 @app.route('/api/people/<int:id_person>', methods=['GET'])
 def get_person(id_person):
     cur.execute("""SELECT * FROM people WHERE "ID_person"=%s""", (id_person,))
 
-    result = cur.fetchall()
-    if result:
-        return {'message': 'data taken succesfully', 'data': result}
+    data = cur.fetchall()
+    if data[0][7]:
+        return {'error': 'user deleted'}, 400
+    result = [data[0][1], data[0][2], data[0][3], data[0][4], data[0][5], data[0][6]]
+    if data:
+        return {'data': result}
     else:
         return {'error': 'person not found'}, 404
 
@@ -44,72 +54,64 @@ def post_person():
     document_type = data['document_type']
     birth_date = data['birth_date']
 
-# ID creation (it could be replaced by making the column in database a serial data type)
-
-    cur.execute("""SELECT * FROM people;""")
-    data = cur.fetchall()
-    IDs = [x[0] for x in data]
-    id_person = 0
-    for i in range(1, len(IDs) + 2):
-        if i not in IDs:
-            id_person = i
-
 # validations
 
 # first_name
-    if first_name == 'Null':
+    if first_name is None:
         errors.append({'field': 'first_name', 'message': 'first_name can not be empty'})
 
     if len(first_name) > 100:
         errors.append({'field': 'first_name', 'message': 'first_name can not be longer than 100 characters'})
 
 # surname
-    if surname == 'Null':
+    if surname is None:
         errors.append({'field': 'surname', 'message': 'surname can not be empty'})
 
     if len(surname) > 100:
         errors.append({'field': 'surname', 'message': 'surname can not be longer than 100 characters'})
 
 # pesel and document validation
-    if pesel == 'Null':
-        pesel = None
-        if document_nr == 'Null':
+    if pesel is None:
+        if document_nr is None:
             errors.append({'field': 'document_nr', 'message': 'document_nr and pesel can not be empty at the same time'})
         elif len(document_nr) > 20:
             errors.append({'field': 'document_nr', 'message': 'document_nr can not be longer than 20 characters'})
-        if document_type == 'Null':
+        if document_type is None:
             errors.append({'field': 'document_type', 'message': 'document_type and pesel can not be empty at the same time'})
         elif len(document_type) > 20:
             errors.append({'field': 'document_type', 'message': 'document_type can not be longer than 20 characters'})
     else:
         if len(pesel) == 11:
-            pesels = [x[3] for x in data]
-            if int(pesel) in pesels:
+            cur.execute("""SELECT "pesel" FROM people""")
+            data = cur.fetchall()
+            pesels = [i[0] for i in data]
+            if pesel in pesels:
                 errors.append({'field': 'pesel', 'message': 'pesel is already registered'})
             if len(document_nr) > 20:
                 errors.append({'field': 'document_nr', 'message': 'document_nr can not be longer than 20 characters'})
             if len(document_type) > 20:
                 errors.append({'field': 'document_type', 'message': 'document_type can not be longer than 20 characters'})
         else:
-            errors.append({'field': 'pesel', 'message': 'pesel must be 11 characters long'})
+            errors.append({'fie.ld': 'pesel', 'message': 'pesel must be 11 characters long'})
 
 
 # date formating and eventual value error detection
     try:
-        actual_birth_date = datetime.datetime.strptime(birth_date, '%Y-%m-%d').date()
+        actual_birth_date = datetime.datetime.strptime(birth_date, '%Y-%m-%d')
     except ValueError:
         errors.append({'field': 'birth_date', 'message': 'wrong date format'})
 
     # error codes
     if errors.__len__() >= 1:
-        return {'errors': errors}, 422
+        return {'errors': errors}, 400
 
     cur.execute("""INSERT INTO people 
-                VALUES (%s, %s, %s, %s, %s, %s, %s);""",
-                (id_person, first_name, surname, pesel, document_nr, document_type, actual_birth_date,)
+                VALUES (DEFAULT, %s, %s, %s, %s, %s, %s, DEFAULT);""",
+                (first_name, surname, pesel, document_nr, document_type, actual_birth_date,)
                 )
+    conn.commit()
 
-    return {'message': f'person added with index {id_person}'}
+    return {'message': f'person added succesfully'}
 
 
 @app.route('/api/people/<int:id_person>', methods=['PUT'])
@@ -132,27 +134,26 @@ def put_person(id_person):
         return {'error': 'person not found'}, 404
 
 # first_name
-    if new_first_name == 'Null':
+    if new_first_name is None:
         errors.append({'field': 'first_name', 'message': 'first_name can not be empty'})
 
     if len(new_first_name) > 100:
         errors.append({'field': 'first_name', 'message': 'first_name can not be longer than 100 characters'})
 
 # surname
-    if new_surname == 'Null':
+    if new_surname is None:
         errors.append({'field': 'surname', 'message': 'surname can not be empty'})
 
     if len(new_surname) > 100:
         errors.append({'field': 'surname', 'message': 'surname can not be longer than 100 characters'})
 
 # pesel and document validation
-    if new_pesel == 'Null':
-        new_pesel = None
-        if new_document_nr == 'Null':
+    if new_pesel is None:
+        if new_document_nr is None:
             errors.append({'field': 'document_nr', 'message': 'document_nr and pesel can not be empty at the same time'})
         elif len(new_document_nr) > 20:
             errors.append({'field': 'document_nr', 'message': 'document_nr can not be longer than 20 characters'})
-        if new_document_type == 'Null':
+        if new_document_type is None:
             errors.append({'field': 'document_type', 'message': 'document_type and pesel can not be empty at the same time'})
         elif len(new_document_type) > 20:
             errors.append({'field': 'document_type', 'message': 'document_type can not be longer than 20 characters'})
@@ -160,7 +161,7 @@ def put_person(id_person):
         if len(new_pesel) == 11:
             pesels = [[x[0], x[3]] for x in data]
             for i in range(0, len(pesels)):
-                if pesels[i][1] == int(new_pesel):
+                if pesels[i][1] == new_pesel:
                     if pesels[i][0] == id_person:
                         break
                     else:
@@ -174,8 +175,9 @@ def put_person(id_person):
             errors.append({'field': 'pesel', 'message': 'pesel must be 11 characters long'})
 
 # date formating and eventual value error detection
+    actual_birth_date = None
     try:
-        actual_birth_date = datetime.datetime.strptime(new_birth_date, '%Y-%m-%d').date()
+        actual_birth_date = datetime.datetime.strptime(new_birth_date, '%Y-%m-%d')
     except ValueError:
         errors.append({'field': 'birth_date', 'message': 'wrong date format'})
 
@@ -185,13 +187,15 @@ def put_person(id_person):
 
     cur.execute("""UPDATE people SET "first_name" = %s, "surname" = %s, "pesel" = %s,
     "document_nr" = %s, "document_type" = %s, "birth_date" = %s  WHERE "ID_person" = %s""", (
-        new_first_name, new_surname, new_pesel, new_document_nr, new_document_type, new_birth_date, id_person,))
+        new_first_name, new_surname, new_pesel, new_document_nr, new_document_type, actual_birth_date, id_person,))
+    conn.commit()
     return {'message': f'updated person with index {id_person}'}
 
 
 @app.route('/api/people/<int:id_person>', methods=['DELETE'])
 def delete_person(id_person):
     cur.execute("""DELETE FROM people WHERE "ID_person" = %s;""",(id_person,))
+    conn.commit()
     return {'message': f'person deleted with index {id_person}'}
 
 # items
@@ -200,7 +204,7 @@ def delete_person(id_person):
 @app.route('/api/items', methods=['GET'])
 def get_all_items():
     cur.execute('SELECT * FROM items')
-    return {'message': 'data taken succesfully', 'data': cur.fetchall()}
+    return {'data': cur.fetchall()}
 
 
 @app.route('/api/items/<int:id_item>', methods=['GET'])
@@ -209,9 +213,10 @@ def get_item(id_item):
 
     result = cur.fetchall()
     if result:
-        return {'message': 'data taken succesfully', 'data': result}
+        return {'data': result}
     else:
         return {'error': 'item not found'}, 404
+
 
 @app.route('/api/items/', methods=['POST'])
 def post_item():
@@ -224,26 +229,18 @@ def post_item():
     item_type = data['type']
     adult_required = data['adult_required']
 
-# ID creation (it could be replaced by making the column in database a serial data type)
-
-    cur.execute("""SELECT * FROM items;""")
-    data = cur.fetchall()
-    ids = [x[0] for x in data]
-    id_item = 0
-    for i in range(1, len(ids) + 2):
-        if i not in ids:
-            id_item = i
-
 # validations
 
 # name
-    if name == 'Null':
+    if name is None:
         errors.append({'field': 'name', 'message': 'name can not be empty'})
 
     if len(name) > 100:
         errors.append({'field': 'name', 'message': 'name can not be longer than 100 characters'})
 
-    names = [x[1] for x in data]
+    cur.execute("""SELECT "name" FROM items""")
+    data = cur.fetchall()
+    names = [i[0] for i in data]
     if name in names:
         errors.append({'field': 'name', 'message': 'name is already taken'})
 # description
@@ -258,7 +255,7 @@ def post_item():
 
 # adult_required
 
-    if adult_required == "Null":
+    if adult_required is None:
         errors.append({'field': 'adult_required', 'message': 'adult_required can not be empty'})
 
     # error codes
@@ -266,11 +263,12 @@ def post_item():
         return {'errors': errors}, 422
 
     cur.execute("""INSERT INTO items 
-                VALUES (%s, %s, %s, %s, %s);""",
-                (id_item, name, description, item_type, adult_required,)
+                VALUES (DEFAULT, %s, %s, %s, %s);""",
+                (name, description, item_type, adult_required,)
                 )
+    conn.commit()
 
-    return {'message': f'item added with index {id_item}'}
+    return {'message': f'item added', 'index': 'todo'}
 
 
 @app.route('/api/items/<int:id_item>', methods=['PUT'])
@@ -283,7 +281,7 @@ def put_item(id_item):
     new_type = new_data['type']
     new_adult_required = new_data['adult_required']
 
-    cur.execute("""SELECT * FROM items""")
+    cur.execute("""SELECT "ID_item","name" FROM items""")
     data = cur.fetchall()
 
     ids = [x[0] for x in data]
@@ -293,7 +291,7 @@ def put_item(id_item):
 # validations
 
 # name
-    if new_name == 'Null':
+    if new_name is None:
         errors.append({'field': 'name', 'message': 'name can not be empty'})
 
     if len(new_name) > 100:
@@ -319,7 +317,7 @@ def put_item(id_item):
 
 # adult_required
 
-    if new_adult_required == "Null":
+    if new_adult_required is None:
         errors.append({'field': 'adult_required', 'message': 'adult_required can not be empty'})
 
     # error codes
@@ -329,12 +327,14 @@ def put_item(id_item):
     cur.execute("""UPDATE items SET "name" = %s, "description" = %s, "type" = %s,
     "adult_required" = %s  WHERE "ID_item" = %s""", (
         new_name, new_description, new_type, new_adult_required, id_item,))
+    conn.commit()
     return {'message': f'updated item with index {id_item}'}
 
 
 @app.route('/api/items/<int:id_item>', methods=['DELETE'])
 def delete_item(id_item):
     cur.execute("""DELETE FROM items WHERE "ID_item" = %s;""", (id_item,))
+    conn.commit()
     return {'message': f'item deleted with index {id_item}'}
 
 
@@ -356,6 +356,51 @@ def get_reservation(id_reserv):
         return {'message': 'data taken succesfully', 'data': result}
     else:
         return {'error': 'item not found'}, 404
+
+
+@app.route('/api/reservations/', methods=['POST'])
+def add_reservation():
+    errors = []
+
+    data = request.get_json()
+    id_person = data['ID_person']
+    id_item = data['ID_item']
+    starting_time = data['starting_time']
+    ending_time = data['ending_time']
+
+    cur.execute("""SELECT ID_person FROM people WHERE "ID_person"=%s""", (id_person,))
+    people_check = cur.fetchall()
+    cur.execute("""SELECT ID_item FROM items WHERE "ID_item"=%s""", (id_item,))
+    items_check = cur.fetchall()
+
+    if not people_check:
+        errors.append({'field': 'ID_person', 'message': 'person not found'})
+    if not items_check:
+        errors.append({'field': 'ID_item', 'message': 'item not found'})
+
+    try:
+        parsed_start = datetime.datetime.strptime(starting_time, '%Y-%m-%d, %H:%M, %z')
+    except ValueError:
+        errors.append({'field': 'starting_time', 'message': 'wrong date format'})
+
+    try:
+        parsed_end = datetime.datetime.strptime(ending_time, '%Y-%m-%d, %H:%M')
+    except ValueError:
+        errors.append({'field': 'ending_time', 'message': 'wrong date format'})
+
+    today = datetime.date.today().strftime('%Y-%m-%d, %H:%M')
+
+    if parsed_start <= today:
+        errors.append({'field': 'starting_time', 'message': 'starting_time must be in the future'})
+    if parsed_end <= today:
+        errors.append({'field': 'ending_time', 'message': 'ending_time must be in the future'})
+
+    if errors.__len__() >= 1:
+        return {'errors': errors}, 400
+
+    cur.execute("""INSERT INTO reservations 
+                VALUES (default, %s, %s, %s, %s);""",
+                (id_person, id_item, parsed_start, parsed_end,))
 
 if __name__ == '__main__':
     app.run(debug=True)
