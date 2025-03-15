@@ -1,6 +1,7 @@
 from flask import Flask, request
 import psycopg2
 import datetime
+import pytz
 
 conn = psycopg2.connect(
     dbname="rentals",
@@ -97,7 +98,7 @@ def post_person():
 
 # date formating and eventual value error detection
     try:
-        actual_birth_date = datetime.datetime.strptime(birth_date, '%Y-%m-%d')
+        actual_birth_date = datetime.date.fromisoformat(birth_date)
     except ValueError:
         errors.append({'field': 'birth_date', 'message': 'wrong date format'})
 
@@ -109,9 +110,10 @@ def post_person():
                 VALUES (DEFAULT, %s, %s, %s, %s, %s, %s, DEFAULT);""",
                 (first_name, surname, pesel, document_nr, document_type, actual_birth_date,)
                 )
+    new_id = "tmp"
     conn.commit()
 
-    return {'message': f'person added succesfully'}
+    return {'message': f'person added succesfully', 'index': new_id}
 
 
 @app.route('/api/people/<int:id_person>', methods=['PUT'])
@@ -177,7 +179,7 @@ def put_person(id_person):
 # date formating and eventual value error detection
     actual_birth_date = None
     try:
-        actual_birth_date = datetime.datetime.strptime(new_birth_date, '%Y-%m-%d')
+        actual_birth_date = datetime.date.fromisoformat(new_birth_date)
     except ValueError:
         errors.append({'field': 'birth_date', 'message': 'wrong date format'})
 
@@ -266,9 +268,10 @@ def post_item():
                 VALUES (DEFAULT, %s, %s, %s, %s);""",
                 (name, description, item_type, adult_required,)
                 )
+    new_id = "tmp"
     conn.commit()
 
-    return {'message': f'item added', 'index': 'todo'}
+    return {'message': f'item added', 'index': new_id}
 
 
 @app.route('/api/items/<int:id_item>', methods=['PUT'])
@@ -344,7 +347,7 @@ def delete_item(id_item):
 @app.route('/api/reservations', methods=['GET'])
 def get_all_reservations():
     cur.execute('SELECT * FROM reservations')
-    return {'message': 'data taken succesfully', 'data': cur.fetchall()}
+    return {'data': cur.fetchall()}
 
 
 @app.route('/api/reservations/<int:id_reserv>', methods=['GET'])
@@ -359,7 +362,7 @@ def get_reservation(id_reserv):
 
 
 @app.route('/api/reservations/', methods=['POST'])
-def add_reservation():
+def post_reservation():
     errors = []
 
     data = request.get_json()
@@ -368,9 +371,9 @@ def add_reservation():
     starting_time = data['starting_time']
     ending_time = data['ending_time']
 
-    cur.execute("""SELECT ID_person FROM people WHERE "ID_person"=%s""", (id_person,))
+    cur.execute("""SELECT "ID_person" FROM people WHERE "ID_person"=%s""", (id_person,))
     people_check = cur.fetchall()
-    cur.execute("""SELECT ID_item FROM items WHERE "ID_item"=%s""", (id_item,))
+    cur.execute("""SELECT "ID_item" FROM items WHERE "ID_item"=%s""", (id_item,))
     items_check = cur.fetchall()
 
     if not people_check:
@@ -379,16 +382,16 @@ def add_reservation():
         errors.append({'field': 'ID_item', 'message': 'item not found'})
 
     try:
-        parsed_start = datetime.datetime.strptime(starting_time, '%Y-%m-%d, %H:%M, %z')
+        parsed_start = datetime.datetime.fromisoformat(starting_time)
     except ValueError:
         errors.append({'field': 'starting_time', 'message': 'wrong date format'})
 
     try:
-        parsed_end = datetime.datetime.strptime(ending_time, '%Y-%m-%d, %H:%M')
+        parsed_end = datetime.datetime.fromisoformat(ending_time)
     except ValueError:
         errors.append({'field': 'ending_time', 'message': 'wrong date format'})
 
-    today = datetime.date.today().strftime('%Y-%m-%d, %H:%M')
+    today = datetime.datetime.now(pytz.timezone('Poland'))
 
     if parsed_start <= today:
         errors.append({'field': 'starting_time', 'message': 'starting_time must be in the future'})
@@ -401,6 +404,11 @@ def add_reservation():
     cur.execute("""INSERT INTO reservations 
                 VALUES (default, %s, %s, %s, %s);""",
                 (id_person, id_item, parsed_start, parsed_end,))
+    conn.commit()
+
+    new_id = "tmp"
+    return {'message': 'reservation added succesfully', 'index': new_id}
+
 
 if __name__ == '__main__':
     app.run(debug=True)
