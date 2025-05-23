@@ -2,6 +2,8 @@ from flask import Flask, request
 import psycopg2
 import datetime
 import pytz
+import pycountry
+import geocoder
 
 conn = psycopg2.connect(
     dbname="rentals",
@@ -196,7 +198,7 @@ def put_person(id_person):
 
 @app.route('/api/people/<int:id_person>', methods=['DELETE'])
 def delete_person(id_person):
-    cur.execute("""DELETE FROM people WHERE "ID_person" = %s;""",(id_person,))
+    cur.execute("""DELETE FROM people WHERE "ID_person" = %s AND "deleted" = false;""",(id_person,))
     conn.commit()
     return {'message': f'person deleted with index {id_person}'}
 
@@ -211,7 +213,7 @@ def get_all_items():
 
 @app.route('/api/items/<int:id_item>', methods=['GET'])
 def get_item(id_item):
-    cur.execute("""SELECT * FROM items WHERE "ID_item"=%s""", (id_item,))
+    cur.execute("""SELECT * FROM items WHERE "ID_item"=%s AND "deleted" = false""", (id_item,))
 
     result = cur.fetchall()
     if result:
@@ -265,7 +267,7 @@ def post_item():
         return {'errors': errors}, 422
 
     cur.execute("""INSERT INTO items 
-                VALUES (DEFAULT, %s, %s, %s, %s);""",
+                VALUES (DEFAULT, %s, %s, %s, %s, DEFAULT);""",
                 (name, description, item_type, adult_required,)
                 )
     new_id = "tmp"
@@ -371,43 +373,148 @@ def post_reservation():
     starting_time = data['starting_time']
     ending_time = data['ending_time']
 
-    cur.execute("""SELECT "ID_person" FROM people WHERE "ID_person"=%s""", (id_person,))
-    people_check = cur.fetchall()
-    cur.execute("""SELECT "ID_item" FROM items WHERE "ID_item"=%s""", (id_item,))
-    items_check = cur.fetchall()
+    correct_time = True
 
-    if not people_check:
-        errors.append({'field': 'ID_person', 'message': 'person not found'})
-    if not items_check:
-        errors.append({'field': 'ID_item', 'message': 'item not found'})
+    if id_person is None:
+        errors.append({'field': 'id_person', 'message': 'id_person can not be empty'})
+    else:
+        cur.execute("""SELECT "ID_person" FROM people WHERE "ID_person"=%s AND "deleted" = false""", (id_person,))
+        people_check = cur.fetchall()
+        if not people_check:
+            errors.append({'field': 'ID_person', 'message': 'person not found'})
 
-    try:
-        parsed_start = datetime.datetime.fromisoformat(starting_time)
-    except ValueError:
-        errors.append({'field': 'starting_time', 'message': 'wrong date format'})
+    if id_item is None:
+        errors.append({'field': 'id_item', 'message': 'id_item can not be empty'})
+    else:
+        cur.execute("""SELECT "ID_item" FROM items WHERE "ID_item"=%s AND "deleted" = false""", (id_item,))
+        items_check = cur.fetchall()
+        if not items_check:
+            errors.append({'field': 'ID_item', 'message': 'item not found'})
 
-    try:
-        parsed_end = datetime.datetime.fromisoformat(ending_time)
-    except ValueError:
-        errors.append({'field': 'ending_time', 'message': 'wrong date format'})
+    if starting_time is None:
+        correct_time = False
+        errors.append({'field': 'starting_time', 'message': 'starting_time can not be empty'})
+    else:
+        try:
+            parsed_start = datetime.datetime.fromisoformat(starting_time)
+        except ValueError:
+            correct_time = False
+            errors.append({'field': 'starting_time', 'message': 'wrong date format'})
 
-    today = datetime.datetime.now(pytz.timezone('Poland'))
+    if ending_time is None:
+        correct_time = False
+        errors.append({'field': 'ending_time', 'message': 'ending_time can not be empty'})
+    else:
+        try:
+            parsed_end = datetime.datetime.fromisoformat(ending_time)
+        except ValueError:
+            correct_time = False
+            errors.append({'field': 'ending_time', 'message': 'wrong date format'})
 
-    if parsed_start <= today:
-        errors.append({'field': 'starting_time', 'message': 'starting_time must be in the future'})
-    if parsed_end <= today:
-        errors.append({'field': 'ending_time', 'message': 'ending_time must be in the future'})
+    g = geocoder.ip('me')
+    country = pycountry.countries.get(alpha_2=g.country).name
+    today = datetime.datetime.now(pytz.timezone(country))
+
+    if correct_time:
+        if parsed_start <= today:
+            errors.append({'field': 'starting_time', 'message': 'starting_time must be in the future'})
+        if parsed_end <= today:
+            errors.append({'field': 'ending_time', 'message': 'ending_time must be in the future'})
+
+        cur.execute("""SELECT "starting_time", "ending_time" FROM reservations WHERE ("starting_time" <= %s 
+        AND "ending_time" >= %s) AND "ID_item" = %s AND "deleted" = false""", (parsed_start, parsed_end, id_item,))
+        dates = cur.fetchall()
+
+        if dates:
+            errors.append({'field': 'starting_time ending_time', 'message': 'time period arleady taken'})
 
     if errors.__len__() >= 1:
         return {'errors': errors}, 400
 
     cur.execute("""INSERT INTO reservations 
-                VALUES (default, %s, %s, %s, %s);""",
+                VALUES (default, %s, %s, %s, %s, DEFAULT);""",
                 (id_person, id_item, parsed_start, parsed_end,))
     conn.commit()
 
     new_id = "tmp"
-    return {'message': 'reservation added succesfully', 'index': new_id}
+    return {'message': 'reservation added successfully', 'index': new_id}
+
+
+@app.route('/api/reservations/<int:id_reservation>', methods=['PUT'])
+def put_reservation(id_reservation):
+    errors = []
+
+    data = request.get_json()
+    id_person = data['ID_person']
+    id_item = data['ID_item']
+    starting_time = data['starting_time']
+    ending_time = data['ending_time']
+
+    correct_time = True
+
+    if id_person is None:
+        errors.append({'field': 'id_person', 'message': 'id_person can not be empty'})
+    else:
+        cur.execute("""SELECT "ID_person" FROM people WHERE "ID_person"=%s AND "deleted" = false""", (id_person,))
+        people_check = cur.fetchall()
+        if not people_check:
+            errors.append({'field': 'ID_person', 'message': 'person not found'})
+
+    if id_item is None:
+        errors.append({'field': 'id_item', 'message': 'id_item can not be empty'})
+    else:
+        cur.execute("""SELECT "ID_item" FROM items WHERE "ID_item"=%s AND "deleted" = false""", (id_item,))
+        items_check = cur.fetchall()
+        if not items_check:
+            errors.append({'field': 'ID_item', 'message': 'item not found'})
+
+    if starting_time is None:
+        correct_time = False
+        errors.append({'field': 'starting_time', 'message': 'starting_time can not be empty'})
+    else:
+        try:
+            parsed_start = datetime.datetime.fromisoformat(starting_time)
+        except ValueError:
+            correct_time = False
+            errors.append({'field': 'starting_time', 'message': 'wrong date format'})
+
+    if ending_time is None:
+        correct_time = False
+        errors.append({'field': 'ending_time', 'message': 'ending_time can not be empty'})
+    else:
+        try:
+            parsed_end = datetime.datetime.fromisoformat(ending_time)
+        except ValueError:
+            correct_time = False
+            errors.append({'field': 'ending_time', 'message': 'wrong date format'})
+
+    g = geocoder.ip('me')
+    country = pycountry.countries.get(alpha_2=g.country).name
+    today = datetime.datetime.now(pytz.timezone(country))
+
+    if correct_time:
+        if parsed_start <= today:
+            errors.append({'field': 'starting_time', 'message': 'starting_time must be in the future'})
+        if parsed_end <= today:
+            errors.append({'field': 'ending_time', 'message': 'ending_time must be in the future'})
+
+        cur.execute("""SELECT "starting_time", "ending_time" FROM reservations WHERE ("starting_time" <= %s 
+        AND "ending_time" >= %s) AND "ID_item" == %s AND "deleted" = false""", (parsed_start, parsed_end, id_item,))
+        dates = cur.fetchall()
+
+        if dates:
+            errors.append({'field': 'starting_time ending_time', 'message': 'time period arleady taken'})
+
+    if errors.__len__() >= 1:
+        return {'errors': errors}, 400
+
+    cur.execute("""UPDATE reservations SET "ID_person" = %s, "ID_item" = %s, "starting_time" = %s, "ending_time" = %s 
+                WHERE "ID_reservation" = %s"""
+                , (id_person, id_item, parsed_start, parsed_end,id_reservation,))
+    conn.commit()
+
+    new_id = "tmp"
+    return {'message': 'reservation added successfully', 'index': new_id}
 
 
 if __name__ == '__main__':
