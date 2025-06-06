@@ -35,10 +35,10 @@ def get_person(id_person):
     cur.execute("""SELECT * FROM people WHERE "ID_person"=%s""", (id_person,))
 
     data = cur.fetchall()
-    if data[0][7]:
-        return {'error': 'user deleted'}, 400
-    result = [data[0][1], data[0][2], data[0][3], data[0][4], data[0][5], data[0][6]]
     if data:
+        if data[0][7]:
+            return {'error': 'user deleted'}, 400
+        result = [data[0][1], data[0][2], data[0][3], data[0][4], data[0][5], data[0][6]]
         return {'data': result}
     else:
         return {'error': 'person not found'}, 404
@@ -198,9 +198,23 @@ def put_person(id_person):
 
 @app.route('/api/people/<int:id_person>', methods=['DELETE'])
 def delete_person(id_person):
-    cur.execute("""DELETE FROM people WHERE "ID_person" = %s AND "deleted" = false;""",(id_person,))
-    conn.commit()
-    return {'message': f'person deleted with index {id_person}'}
+    cur.execute("""SELECT 'True' FROM reservations WHERE "ID_person" = %s;""", (id_person,))
+    if cur.fetchall():
+        return {'message': 'can not delete: there is reservation made by that person'}, 400
+    else:
+        cur.execute("""SELECT "ID_person", "deleted" from people WHERE "ID_person" = %s;""", (id_person,))
+        data = cur.fetchall()
+        print(data)
+        if not data:
+            return {'message': 'person not found'}, 404
+        if data[0][1]:
+            return {'message': 'person already deleted'}, 400
+
+        cur.execute("""UPDATE people SET "first_name" = "deleted", "surname" = "deleted", "pesel" = NULL,
+    "document_nr" = NULL, "document_type" = NULL, "birth_date" = %s, "deleted" = True  WHERE "ID_person" = %s""",
+                    (datetime.datetime.today(), id_person,))
+        conn.commit()
+        return {'message': f'person deleted with index {id_person}'}
 
 # items
 
@@ -208,15 +222,25 @@ def delete_person(id_person):
 @app.route('/api/items', methods=['GET'])
 def get_all_items():
     cur.execute('SELECT * FROM items')
-    return {'data': cur.fetchall()}
+    data = cur.fetchall()
+    result = []
+    for i in data:
+        if i[5]:
+            continue
+        else:
+            result.append([i[0], i[1], i[2], i[3], i[4]])
+    return {'data': result}
 
 
 @app.route('/api/items/<int:id_item>', methods=['GET'])
 def get_item(id_item):
     cur.execute("""SELECT * FROM items WHERE "ID_item"=%s AND "deleted" = false""", (id_item,))
 
-    result = cur.fetchall()
-    if result:
+    data = cur.fetchall()
+    if data:
+        if data[0][5]:
+            return {'error': 'user deleted'}, 400
+        result = [data[0][1], data[0][2], data[0][3], data[0][4]]
         return {'data': result}
     else:
         return {'error': 'item not found'}, 404
@@ -349,15 +373,25 @@ def delete_item(id_item):
 @app.route('/api/reservations', methods=['GET'])
 def get_all_reservations():
     cur.execute('SELECT * FROM reservations')
-    return {'data': cur.fetchall()}
+    data = cur.fetchall()
+    result = []
+    for i in data:
+        if i[5]:
+            continue
+        else:
+            result.append([i[0], i[1], i[2], i[3], i[4]])
+    return {'data': result}
 
 
 @app.route('/api/reservations/<int:id_reserv>', methods=['GET'])
 def get_reservation(id_reserv):
     cur.execute("""SELECT * FROM reservations WHERE "ID_reservation"=%s""", (id_reserv,))
 
-    result = cur.fetchall()
-    if result:
+    data = cur.fetchall()
+    if data:
+        if data[0][5]:
+            return {'error': 'user deleted'}, 400
+        result = [data[0][1], data[0][2], data[0][3], data[0][4]]
         return {'message': 'data taken succesfully', 'data': result}
     else:
         return {'error': 'item not found'}, 404
@@ -499,7 +533,7 @@ def put_reservation(id_reservation):
             errors.append({'field': 'ending_time', 'message': 'ending_time must be in the future'})
 
         cur.execute("""SELECT "starting_time", "ending_time" FROM reservations WHERE ("starting_time" <= %s 
-        AND "ending_time" >= %s) AND "ID_item" == %s AND "deleted" = false""", (parsed_start, parsed_end, id_item,))
+        AND "ending_time" >= %s) AND "ID_item" = %s AND "deleted" = false""", (parsed_start, parsed_end, id_item,))
         dates = cur.fetchall()
 
         if dates:
@@ -514,7 +548,13 @@ def put_reservation(id_reservation):
     conn.commit()
 
     new_id = "tmp"
-    return {'message': 'reservation added successfully', 'index': new_id}
+    return {'message': 'reservation altered successfully', 'index': new_id}
+
+@app.route('/api/reservations/<int:id_reservation>', methods=['DELETE'])
+def delete_reservation(id_reservation):
+    cur.execute("""DELETE FROM reservations WHERE "ID_reservation" = %s;""", (id_reservation,))
+    conn.commit()
+    return {'message': f'reservation deleted with index {id_reservation}'}
 
 
 if __name__ == '__main__':
