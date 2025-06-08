@@ -198,16 +198,15 @@ def put_person(id_person):
 
 @app.route('/api/people/<int:id_person>', methods=['DELETE'])
 def delete_person(id_person):
-    cur.execute("""SELECT 'True' FROM reservations WHERE "ID_person" = %s;""", (id_person,))
+    cur.execute("""SELECT 'True' FROM reservations WHERE "ID_person" = %s AND "deleted" = FALSE;""", (id_person,))
     if cur.fetchall():
         return {'message': 'can not delete: there is reservation made by that person'}, 400
     else:
-        cur.execute("""SELECT "ID_person", "deleted" from people WHERE "ID_person" = %s;""", (id_person,))
+        cur.execute("""SELECT "deleted" from people WHERE "ID_person" = %s;""", (id_person,))
         data = cur.fetchall()
-        print(data)
         if not data:
             return {'message': 'person not found'}, 404
-        if data[0][1]:
+        if data[0][0]:
             return {'message': 'person already deleted'}, 400
 
         cur.execute("""UPDATE people SET "first_name" = "deleted", "surname" = "deleted", "pesel" = NULL,
@@ -362,9 +361,22 @@ def put_item(id_item):
 
 @app.route('/api/items/<int:id_item>', methods=['DELETE'])
 def delete_item(id_item):
-    cur.execute("""DELETE FROM items WHERE "ID_item" = %s;""", (id_item,))
-    conn.commit()
-    return {'message': f'item deleted with index {id_item}'}
+    cur.execute("""SELECT 'True' FROM reservations WHERE "ID_item" = %s AND "deleted" = FALSE;""", (id_item,))
+    if cur.fetchall():
+        return {'message': 'can not delete: there is reservation made on that item'}, 400
+    else:
+        cur.execute("""SELECT "deleted" from items WHERE "ID_item" = %s;""", (id_item,))
+        data = cur.fetchall()
+        if not data:
+            return {'message': 'item not found'}, 404
+        if data[0][0]:
+            return {'message': 'item already deleted'}, 400
+
+        cur.execute("""UPDATE items SET "name" = "deleted", "description" = NULL, "type" = "deleted",
+        "adult_required" = False, "deleted" = True  WHERE "ID_item" = %s""",
+                    (id_item,))
+        conn.commit()
+        return {'message': f'item deleted with index {id_item}'}
 
 
 # reservations
@@ -552,7 +564,15 @@ def put_reservation(id_reservation):
 
 @app.route('/api/reservations/<int:id_reservation>', methods=['DELETE'])
 def delete_reservation(id_reservation):
-    cur.execute("""DELETE FROM reservations WHERE "ID_reservation" = %s;""", (id_reservation,))
+
+    cur.execute("""SELECT "deleted" from reservations WHERE "ID_reservation" = %s;""", (id_reservation,))
+    data = cur.fetchall()
+    if not data:
+        return {'message': 'reservation not found'}, 404
+    if data[0][0]:
+        return {'message': 'reservation already deleted'}, 400
+
+    cur.execute("""UPDATE reservations SET "deleted" = TRUE WHERE "ID_reservation" = %s""", (id_reservation,))
     conn.commit()
     return {'message': f'reservation deleted with index {id_reservation}'}
 
