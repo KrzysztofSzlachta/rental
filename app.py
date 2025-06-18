@@ -577,5 +577,54 @@ def delete_reservation(id_reservation):
     return {'message': f'reservation deleted with index {id_reservation}'}
 
 
+# searching
+
+@app.route('/api/search/user/<string:user>', methods=['GET'])
+def search_user(user):
+
+    cur.execute("""SELECT * FROM reservations res, people peo, items ite WHERE res."ID_person" = peo."ID_person" 
+    AND res."ID_item" = ite."ID_item" AND (peo."first_name" LIKE {}
+    OR peo."surname" LIKE {});""".format("'%" + user + "%'", "'%" + user + "%'"))
+
+    data = cur.fetchall()
+
+    if not data:
+        return {'message': 'no reservations found'}, 404
+    else:
+        result = []
+        for i in data:
+            print(i)
+            if not i[5]:
+                result.append([i[7], i[8], i[3], i[4], i[15], i[16], i[17]])
+
+    if result:
+        return {'reservations': result}, 200
+    else:
+        return {'message': 'no reservations found'}, 404
+
+
+@app.route('/api/search/item/<string:item>', methods=['GET'])
+def search_item(item):
+    cur.execute("""SELECT * FROM reservations res, people peo, items ite WHERE res."ID_person" = peo."ID_person" 
+    AND res."ID_item" = ite."ID_item" AND (ite."name" LIKE {}
+    OR ite."type" LIKE {});""".format("'%" + item + "%'", "'%" + item + "%'"))
+
+    data = cur.fetchall()
+
+    if not data:
+        return {'message': 'no reservations found'}, 404
+    else:
+        result = []
+        for i in data:
+            if not i[5]:
+                return result.append([i[7], i[8], i[15], i[16], i[17], i[18], i[3], i[4]])
+    print(result)
+    if result:
+        return {'reservations': result}, 200
+    else:
+        return {'message': 'no reservations found'}, 404
+
+
 if __name__ == '__main__':
     app.run(debug=True)
+    host = '',
