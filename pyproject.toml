@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rentals"
+version = "0.0.1"
+authors = [
+  { name="Krzysztof Szlachta", email="krzysztof.szlachta@poczta.fm" },
+]
+description = "A renting web app project"
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "flask>=3.0.0",
+    "psycopg2>=2.9.10",
+    "geocoder>=1.38.0",
+    "pycountry>=24.6.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/KrzysztofSzlachta/rental"
+Issues = "https://github.com/KrzysztofSzlachta/rental/issues"
+
+[tool.hatch.build]
+packages = ["flaskTest"]
