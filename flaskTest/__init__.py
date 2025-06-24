@@ -7,7 +7,7 @@ def create_app():
     app = Flask(__name__)
     app.config.from_mapping(
         SECRET_KEY='dev',
-        DATABASE="dbname=rentals user=postgres password=Zaq12wsx"
+        DATABASE="dbname=rentals user=postgres password=1234"
     )
 
     app.teardown_appcontext(close_connection)
